@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "nodenext",
+    "module": "esnext",
+    "target": "esnext",
+    "lib": ["esnext", "dom"],
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "dist",
+    "declaration": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "ts-node": {
+    "swc": true
+  }
+}

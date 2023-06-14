@@ -1,0 +1,85 @@
+name: Run live tests on pending multisig
+
+on:
+  workflow_dispatch:
+    inputs:
+      api:
+        description: "Safe API endpoint"
+        required: false
+        type: string
+        default: "https://safe-transaction-mainnet.safe.global"
+      tx:
+        description: "Multisig transaction safe tx hash"
+        required: true
+        type: string
+      multisig:
+        description: "Multisig contract address"
+        default: "0xA7D5DDc1b8557914F158076b228AA91eF613f1D5"
+        required: false
+        type: string
+
+env:
+  CI: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Checkout runner script (this repo)
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          path: runner
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          cache: "yarn"
+          node-version-file: "runner/.nvmrc"
+          cache-dependency-path: "runner/yarn.lock"
+
+      - name: Install node dependencies in runner
+        run: |
+          yarn install --frozen-lockfile
+        working-directory: runner
+
+      - name: Checkout integrations-v3
+        uses: actions/checkout@v3
+        with:
+          repository: Gearbox-protocol/integrations-v3
+          ref: legacy
+          # ${{ github.token }} is scoped to the current repository
+          token: ${{ secrets.PEER_REPO_GH_TOKEN }}
+          path: integrations-v3
+
+      - name: Install node dependencies in integrations-v3
+        run: |
+          yarn install --frozen-lockfile
+        working-directory: integrations-v3
+
+      - name: Run detached anvil fork
+        # "&" in the end makes it detached
+        run: |
+          anvil -f ${{ secrets.MAINNET_TESTS_FORK }} --chain-id 1337 &
+
+      - name: Apply multisig tx
+        run: |
+          yarn apply
+        env:
+          SAFE_API: ${{ inputs.api }}
+          SAFE_TX: ${{ inputs.tx }}
+          MULTISIG: ${{ inputs.multisig }}
+          RUN_ID: ${{ github.run_id }}
+        working-directory: runner
+        timeout-minutes: 40
+
+      - name: Run live forge tests
+        run: |
+          forge t --match-test _live_ --fork-url http://localhost:8545
+        timeout-minutes: 15
+        working-directory: integrations-v3
