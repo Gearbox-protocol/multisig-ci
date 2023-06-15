@@ -39,7 +39,7 @@ export interface MultisendTransactionParameter {
 
 export interface SafeMultisigTransaction {
   // safe: string;
-  // to: string;
+  to: string;
   // value: string;
   data: string;
   // operation: number;
