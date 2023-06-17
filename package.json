@@ -15,7 +15,10 @@
     "typecheck:ci": "tsc --noEmit"
   },
   "dependencies": {
-    "ethers": "^6.6.0",
+    "@safe-global/api-kit": "^1.1.0",
+    "@safe-global/protocol-kit": "^1.0.1",
+    "@safe-global/safe-core-sdk-types": "^2.0.0",
+    "ethers": "5.7.2",
     "p-retry": "^5.1.2"
   },
   "devDependencies": {
