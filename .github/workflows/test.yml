@@ -64,8 +64,9 @@ jobs:
 
       - name: Run detached anvil fork
         # "&" in the end makes it detached
+        # chain id is also important
         run: |
-          anvil -f ${{ secrets.MAINNET_TESTS_FORK }} --chain-id 1337 &
+          anvil -f ${{ secrets.MAINNET_TESTS_FORK }} --chain-id 1 &
 
       - name: Apply multisig tx
         run: |
