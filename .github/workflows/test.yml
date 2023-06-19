@@ -12,6 +12,10 @@ on:
         description: "Multisig transaction safe tx hash"
         required: true
         type: string
+      callback:
+        description: "URL to trigger when run starts and finished"
+        required: false
+        type: string
       multisig:
         description: "Multisig contract address"
         default: "0xA7D5DDc1b8557914F158076b228AA91eF613f1D5"
@@ -25,6 +29,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Trigger callback on start
+        if: github.event.inputs.callback != ''
+        run: |
+          curl \
+            -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
+            -X GET \
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&status=RUN"
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
@@ -84,3 +96,19 @@ jobs:
           forge t --match-test _live_ --fork-url http://localhost:8545
         timeout-minutes: 15
         working-directory: integrations-v3
+
+      - name: The job has succeeded
+        if: ${{ success() && github.event.inputs.callback != '' }}
+        run: |
+          curl \
+            -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
+            -X GET \
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&status=PASS"
+
+      - name: The job has failed
+        if: ${{ failure() && github.event.inputs.callback != '' }}
+        run: |
+          curl \
+            -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
+            -X GET \
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&status=FAIL"
