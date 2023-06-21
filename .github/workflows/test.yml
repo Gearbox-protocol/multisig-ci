@@ -35,7 +35,7 @@ jobs:
           curl \
             -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
             -X GET \
-            "${{ inputs.callback }}?run_id=${{ github.run_id }}&status=RUN"
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ inputs.tx }}&status=RUN"
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -103,7 +103,7 @@ jobs:
           curl \
             -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
             -X GET \
-            "${{ inputs.callback }}?run_id=${{ github.run_id }}&status=PASS"
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ inputs.tx }}&status=PASS"
 
       - name: The job has failed
         if: ${{ failure() && github.event.inputs.callback != '' }}
@@ -111,4 +111,4 @@ jobs:
           curl \
             -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
             -X GET \
-            "${{ inputs.callback }}?run_id=${{ github.run_id }}&status=FAIL"
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ inputs.tx }}&status=FAIL"
