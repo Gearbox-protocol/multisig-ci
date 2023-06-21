@@ -12,10 +12,12 @@ console.log(`current block number: ${block.number} at ${block.timestamp}`);
 
 const safeHelper = new SafeHelper(provider);
 await safeHelper.init();
-const eta = await safeHelper.validateTransaction();
+const [isQueue, eta] = await safeHelper.validateTransaction(block.timestamp);
 await safeHelper.impersonateSafe();
 await safeHelper.ensurePermissions();
-await safeHelper.timelockQueue();
+if (isQueue) {
+  await safeHelper.timelockQueue();
+}
 await warpTime(provider, eta + 1);
 await safeHelper.timelockExecute();
 

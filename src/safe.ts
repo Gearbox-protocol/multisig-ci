@@ -54,7 +54,9 @@ class SafeHelper {
   /**
    * Checks that a transcaction is a timelock transaction that queues other transactions
    */
-  public async validateTransaction(): Promise<number> {
+  public async validateTransaction(
+    timestamp: number,
+  ): Promise<[isQueue: boolean, eta: number]> {
     const data = (await this.#service.getTransaction(
       this.#safeTxHash,
     )) as unknown as MultisigTx;
@@ -78,8 +80,19 @@ class SafeHelper {
     );
     const txs = data.dataDecoded.parameters[0].valueDecoded;
     assert.notEqual(txs.length, 0, "expected some transactions");
+    let isQueue = true;
     for (const tx of txs) {
-      assert.equal(tx.dataDecoded.method, "queueTransaction");
+      const method = tx.dataDecoded.method;
+      if (!["queueTransaction", "executeTransaction"].includes(method)) {
+        throw new Error(
+          "only queueTransaction and executeTransaction are allowed",
+        );
+      }
+      if (method === "executeTransaction") {
+        isQueue = false;
+      } else if (!isQueue) {
+        throw new Error("mixed queueTransaction and executeTransaction");
+      }
       assert.equal(tx.dataDecoded.parameters.length, 5);
     }
 
@@ -87,11 +100,14 @@ class SafeHelper {
     for (const tx of txs) {
       eta = Math.max(parseInt(tx.dataDecoded.parameters[4].value, 10), eta);
     }
+
+    assert.ok(eta > timestamp, "ETA is outdated");
+
     console.log(
       `multisig transaction contains ${txs.length} timelock transactions and eta is ${eta}`,
     );
 
-    return eta;
+    return [isQueue, eta];
   }
 
   /**
