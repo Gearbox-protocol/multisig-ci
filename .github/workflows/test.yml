@@ -84,8 +84,10 @@ jobs:
           path: router
 
       - name: Install node dependencies in router
+        # TODO: install latest integrations-v3 as a temporary workaround
         run: |
           yarn install --frozen-lockfile
+          yarn add @gearbox-protocol/integrations-v3@legacy
         working-directory: router
 
       - name: Run detached anvil fork
@@ -105,14 +107,25 @@ jobs:
         timeout-minutes: 40
 
       - name: Run live forge tests in integrations-v3
+        # TODO: wstETH is temporary removed
         run: |
-          forge t --match-test _live_ --fork-url http://localhost:8545
+          for u in DAI USDC WETH WBTC FRAX ;
+          do
+            export ETH_FORK_TESTED_CM_ASSET=$u
+            echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
+            forge t --match-test _live_ --fork-url http://localhost:8545
+          done
         timeout-minutes: 15
         working-directory: integrations-v3
 
       - name: Run live forge tests in router
         run: |
-          forge t --match-test _live_ --fork-url http://localhost:8545
+          for u in DAI USDC WETH WBTC FRAX ;
+          do
+            export ETH_FORK_TESTED_CM_ASSET=$u
+            echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
+            forge t --match-test _live_ --fork-url http://localhost:8545
+          done
         timeout-minutes: 15
         working-directory: router
 
