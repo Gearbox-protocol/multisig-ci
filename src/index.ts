@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 
 import SafeHelper from "./safe.js";
-import { waitForBlock, warpTime } from "./utils.js";
+import { waitForBlock } from "./utils.js";
 
 const { SAFE_TX, RUN_ID } = process.env;
 console.log(`run ${RUN_ID}: testing safe tx ${SAFE_TX}`);
@@ -12,13 +12,7 @@ console.log(`current block number: ${block.number} at ${block.timestamp}`);
 
 const safeHelper = new SafeHelper(provider);
 await safeHelper.init();
-const [isQueue, eta] = await safeHelper.validateTransaction(block.timestamp);
 await safeHelper.impersonateSafe();
-await safeHelper.ensurePermissions();
-if (isQueue) {
-  await safeHelper.timelockQueue();
-}
-await warpTime(provider, eta + 1);
-await safeHelper.timelockExecute();
+await safeHelper.run();
 
 console.log("done");

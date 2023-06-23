@@ -1,10 +1,19 @@
 import SafeApiKit from "@safe-global/api-kit";
 import Safe, { EthersAdapter } from "@safe-global/protocol-kit";
+import {
+  SafeMultisigTransactionResponse,
+  SafeTransaction,
+} from "@safe-global/safe-core-sdk-types";
 import { ethers } from "ethers";
 import assert from "node:assert/strict";
 
-import { MultisigTx } from "./types.js";
-import { impersonate, stopImpersonate } from "./utils.js";
+import { MultisendTx, SingleTx, TimelockExecute, TxInfo } from "./types.js";
+import {
+  getTransactionsToExecute,
+  impersonate,
+  stopImpersonate,
+  warpTime,
+} from "./utils.js";
 
 const SIG_EXECUTE = "0x0825f38f";
 const SIG_QUEUE = "0x3a66f901";
@@ -13,16 +22,15 @@ class SafeHelper {
   #provider: ethers.providers.JsonRpcProvider;
   #service!: SafeApiKit.default;
   #signer!: ethers.providers.JsonRpcSigner;
-  #safeTxHash: string;
   #safeAddress: string;
   #safe!: Safe.default;
+  #pending: SafeMultisigTransactionResponse[] = [];
+  #timelockExecutions: TimelockExecute[] = [];
 
   constructor(provider: ethers.providers.JsonRpcProvider) {
     this.#provider = provider;
-    const { SAFE_TX, MULTISIG } = process.env;
-    assert.ok(SAFE_TX, "safe tx hash not specified");
+    const { MULTISIG } = process.env;
     assert.ok(MULTISIG, "multisig address not specified");
-    this.#safeTxHash = SAFE_TX;
     this.#safeAddress = MULTISIG;
   }
 
@@ -49,65 +57,10 @@ class SafeHelper {
     const signerAddress = await this.#signer.getAddress();
 
     console.log("initialized safe helper with signer:", signerAddress);
-  }
-
-  /**
-   * Checks that a transcaction is a timelock transaction that queues other transactions
-   */
-  public async validateTransaction(
-    timestamp: number,
-  ): Promise<[isQueue: boolean, eta: number]> {
-    const data = (await this.#service.getTransaction(
-      this.#safeTxHash,
-    )) as unknown as MultisigTx;
-
-    assert.ok(!data.isExecuted, "safe tx already executed");
-
-    assert.equal(
-      data.dataDecoded.method,
-      "multiSend",
-      "expected multiSend transaction",
+    const pendingTransactions = await this.#service.getPendingTransactions(
+      this.#safeAddress,
     );
-    assert.equal(
-      data.dataDecoded.parameters.length,
-      1,
-      "expected multiSend transaction with 1 parameter",
-    );
-    assert.equal(
-      data.dataDecoded.parameters[0].name,
-      "transactions",
-      "expected multiSend transactions",
-    );
-    const txs = data.dataDecoded.parameters[0].valueDecoded;
-    assert.notEqual(txs.length, 0, "expected some transactions");
-    let isQueue = true;
-    for (const tx of txs) {
-      const method = tx.dataDecoded.method;
-      if (!["queueTransaction", "executeTransaction"].includes(method)) {
-        throw new Error(
-          "only queueTransaction and executeTransaction are allowed",
-        );
-      }
-      if (method === "executeTransaction") {
-        isQueue = false;
-      } else if (!isQueue) {
-        throw new Error("mixed queueTransaction and executeTransaction");
-      }
-      assert.equal(tx.dataDecoded.parameters.length, 5);
-    }
-
-    let eta = 0;
-    for (const tx of txs) {
-      eta = Math.max(parseInt(tx.dataDecoded.parameters[4].value, 10), eta);
-    }
-
-    assert.ok(eta > timestamp, "ETA is outdated");
-
-    console.log(
-      `multisig transaction contains ${txs.length} timelock transactions and eta is ${eta}`,
-    );
-
-    return [isQueue, eta];
+    this.#pending = getTransactionsToExecute(pendingTransactions);
   }
 
   /**
@@ -138,37 +91,110 @@ class SafeHelper {
     await stopImpersonate(this.#provider, this.#safeAddress);
   }
 
-  /**
-   * Before timelock transactions can be executed, it must be given some permissions
-   * - acl.addPausableAdmin
-   * - acl.addUnpausableAdmin
-   * - acl.transferOwnership
-   * - addressProvider.transferOwnership
-   * There's multisig tx with safe tx hash 0x5c649bc2ed3069f8b39989f37d7396838263bb60bddb912b065989029e7c09e8
-   * that performs this changes
-   * @returns
-   */
-  public async ensurePermissions(): Promise<void> {
-    const permissionsTx = await this.#service.getTransaction(
-      "0x5c649bc2ed3069f8b39989f37d7396838263bb60bddb912b065989029e7c09e8",
-    );
-    if (permissionsTx.isExecuted) {
-      console.log("pemissions tx is already executed");
-      return;
+  public async run(): Promise<void> {
+    // iterate through pending transactions
+    for (const tx of this.#pending) {
+      const { timestamp } = await this.#provider.getBlock("latest");
+      const { multisend, isExecute, isQueue, eta } = this.#validateTransaction(
+        timestamp,
+        tx,
+      );
+      if (isExecute) {
+        await warpTime(this.#provider, eta + 1);
+      }
+      await this.#execute(tx);
+      if (isQueue) {
+        this.#timelockExecutions.push(
+          await this.#getTimelockExecute(tx, multisend, eta),
+        );
+      }
     }
-    const tx = await this.#safe.executeTransaction(permissionsTx, {
-      gasLimit: 30_000_000,
-    });
-    const receipt = await tx.transactionResponse?.wait();
-    assert.ok(receipt?.status, "failed to execute permissions tx");
-    console.log("executed permissions tx");
+    // iterate through "executeTransaction" timelock
+    for (const tx of this.#timelockExecutions) {
+      await warpTime(this.#provider, tx.eta + 1);
+      await this.#execute(tx.tx);
+    }
+  }
+
+  #validateTransaction(
+    timestamp: number,
+    data: SafeMultisigTransactionResponse,
+  ): TxInfo {
+    assert.ok(!data.isExecuted, "safe tx already executed");
+    if ((data.dataDecoded as any)?.method === "multiSend") {
+      return this.#validateMultisend(timestamp, data as unknown as MultisendTx);
+    }
+    return this.#validateSingle(timestamp, data as unknown as SingleTx);
+  }
+
+  #validateMultisend(timestamp: number, data: MultisendTx): TxInfo {
+    assert.equal(
+      data.dataDecoded.parameters.length,
+      1,
+      "expected multiSend transaction with 1 parameter",
+    );
+    assert.equal(
+      data.dataDecoded.parameters[0].name,
+      "transactions",
+      "expected multiSend transactions",
+    );
+    const txs = data.dataDecoded.parameters[0].valueDecoded;
+    assert.notEqual(txs.length, 0, "expected some transactions");
+    let eta = 0;
+    let isQueue = false;
+    let isExecute = false;
+    for (const tx of txs) {
+      const method = tx.dataDecoded.method;
+      if (method === "queueTransaction" || method === "executeTransaction") {
+        assert.equal(tx.dataDecoded.parameters.length, 5);
+        eta = Math.max(parseInt(tx.dataDecoded.parameters[4].value, 10), eta);
+        isQueue ||= method === "queueTransaction";
+        isExecute ||= method === "executeTransaction";
+      }
+    }
+
+    if (eta) {
+      assert.ok(eta > timestamp, "ETA is outdated");
+    }
+
+    return {
+      multisend: true,
+      isQueue,
+      isExecute,
+      eta,
+    };
+  }
+
+  #validateSingle(timestamp: number, data: SingleTx): TxInfo {
+    const method = data.dataDecoded.method;
+    if (method === "queueTransaction" || method === "executeTransaction") {
+      const isQueue = method === "queueTransaction";
+      assert.equal(data.dataDecoded.parameters.length, 5);
+      const etaP = data.dataDecoded.parameters.find(p => p.name === "eta");
+      assert.ok(etaP, "eta parameter not found");
+      const eta = parseInt(data.dataDecoded.parameters[4].value, 10);
+      assert.ok(eta > timestamp, "ETA is outdated");
+      return {
+        isQueue,
+        isExecute: !isQueue,
+        multisend: false,
+        eta,
+      };
+    }
+    return {
+      isQueue: false,
+      isExecute: false,
+      multisend: false,
+      eta: timestamp,
+    };
   }
 
   /**
-   * Executes multisig that contains timelock.queueTransaction calls
+   * Executes transaction as is
    */
-  public async timelockQueue(): Promise<void> {
-    const tx = await this.#service.getTransaction(this.#safeTxHash);
+  async #execute(
+    tx: SafeMultisigTransactionResponse | SafeTransaction,
+  ): Promise<void> {
     const executeTxResponse = await this.#safe.executeTransaction(tx, {
       gasLimit: 30_000_000,
     });
@@ -176,33 +202,51 @@ class SafeHelper {
       executeTxResponse.transactionResponse?.wait(),
     );
     assert.ok(receipt?.status, "failed to execute transaction");
-    console.log("executed timelock queue transaction");
+    if ("safeTxHash" in tx) {
+      console.log(`executed safe tx ${tx.safeTxHash} with nonce ${tx.nonce}`);
+    } else {
+      console.log(`executed safe tx with nonce ${tx.data.nonce}`);
+    }
   }
 
   /**
-   * Executes multisig that contains timelock.executeTransaction calls
-   * It's manufacture from queueTransaction multisig tx by replacing call signatures
+   * Replaces `queue` with `execute` in multisend and single timelock transactions
+   * @param data
+   * @param multisend
+   * @param eta
+   * @returns
    */
-  public async timelockExecute() {
-    const queueTx = (await this.#service.getTransaction(
-      this.#safeTxHash,
-    )) as unknown as MultisigTx;
-
-    const tx = await this.#safe.createTransaction({
-      safeTransactionData: queueTx.dataDecoded.parameters[0].valueDecoded.map(
-        v => ({
+  async #getTimelockExecute(
+    data: SafeMultisigTransactionResponse,
+    multisend: boolean,
+    eta: number,
+  ): Promise<TimelockExecute> {
+    let tx: SafeTransaction;
+    if (multisend) {
+      tx = await this.#safe.createTransaction({
+        safeTransactionData: (
+          data as unknown as MultisendTx
+        ).dataDecoded.parameters[0].valueDecoded.map(v => ({
           ...v,
           data: v.data.replace(SIG_QUEUE, SIG_EXECUTE),
-        }),
-      ),
-    });
-
-    const resp = await this.#safe.executeTransaction(tx, {
-      gasLimit: 30_000_000,
-    });
-    const receipt = await Promise.resolve(resp.transactionResponse?.wait());
-    assert.ok(receipt?.status, "failed to execute queued transaction");
-    console.log("executed timelock execute transaction");
+        })),
+      });
+    } else {
+      const t = data as unknown as SingleTx;
+      tx = await this.#safe.createTransaction({
+        safeTransactionData: {
+          to: t.to,
+          data: t.data!.replace(SIG_QUEUE, SIG_EXECUTE),
+          value: t.value,
+        },
+      });
+    }
+    console.log(
+      `Created timelock execute tx for ${
+        multisend ? "multisend" : "single"
+      } safe tx ${data.safeTxHash}: nonce ${tx.data.nonce} and eta ${eta}`,
+    );
+    return { tx, eta };
   }
 }
 

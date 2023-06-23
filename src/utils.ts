@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import sortedUniqBy from "lodash-es/sortedUniqBy.js";
 import assert from "node:assert/strict";
 import retry, { Options } from "p-retry";
 
@@ -52,5 +53,40 @@ export async function warpTime(
   assert.ok(latestBlock);
   console.log(
     `warped time, latest block #${latestBlock.number} at ${latestBlock.timestamp}`,
+  );
+}
+
+interface SortableTx {
+  nonce: number;
+  submissionDate: string;
+}
+
+interface SortableTxList<T extends SortableTx> {
+  results: T[];
+}
+
+/**
+ * Given a list of pending transactions, returns an array of transactions to execute on fork
+ * Sorted by nonce ASC
+ * If two txs with same nonce exist, most recent one is selected
+ * @param resp
+ * @returns
+ */
+export function getTransactionsToExecute<
+  T extends SortableTx,
+  L extends SortableTxList<T>,
+>(resp: L): T[] {
+  return sortedUniqBy(
+    resp.results.sort((a: T, b: T) => {
+      if (a.nonce !== b.nonce) {
+        return a.nonce - b.nonce;
+      } else {
+        return (
+          new Date(b.submissionDate).getTime() -
+          new Date(a.submissionDate).getTime()
+        );
+      }
+    }),
+    "nonce",
   );
 }
