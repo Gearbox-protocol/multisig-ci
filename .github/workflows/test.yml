@@ -75,6 +75,19 @@ jobs:
           yarn install --frozen-lockfile
         working-directory: integrations-v3
 
+      - name: Checkout router
+        uses: actions/checkout@v3
+        with:
+          repository: Gearbox-protocol/router
+          # ${{ github.token }} is scoped to the current repository
+          token: ${{ secrets.PEER_REPO_GH_TOKEN }}
+          path: router
+
+      - name: Install node dependencies in router
+        run: |
+          yarn install --frozen-lockfile
+        working-directory: router
+
       - name: Run detached anvil fork
         # "&" in the end makes it detached
         # chain id is also important
@@ -91,11 +104,17 @@ jobs:
         working-directory: runner
         timeout-minutes: 40
 
-      - name: Run live forge tests
+      - name: Run live forge tests in integrations-v3
         run: |
           forge t --match-test _live_ --fork-url http://localhost:8545
         timeout-minutes: 15
         working-directory: integrations-v3
+
+      - name: Run live forge tests in router
+        run: |
+          forge t --match-test _live_ --fork-url http://localhost:8545
+        timeout-minutes: 15
+        working-directory: router
 
       - name: The job has succeeded
         if: ${{ success() && github.event.inputs.callback != '' }}
