@@ -10,7 +10,8 @@ on:
         default: "https://safe-transaction-mainnet.safe.global"
       tx:
         description: "Multisig transaction safe tx hash"
-        required: true
+        required: false
+        default: dummy
         type: string
       callback:
         description: "URL to trigger when run starts and finished"
@@ -82,10 +83,9 @@ jobs:
 
       - name: Apply multisig tx
         run: |
-          yarn apply
+          yarn start
         env:
           SAFE_API: ${{ inputs.api }}
-          SAFE_TX: ${{ inputs.tx }}
           MULTISIG: ${{ inputs.multisig }}
           RUN_ID: ${{ github.run_id }}
         working-directory: runner
