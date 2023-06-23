@@ -113,7 +113,7 @@ jobs:
           do
             export ETH_FORK_TESTED_CM_ASSET=$u
             echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
-            forge t --match-test _live_ --fork-url http://localhost:8545
+            forge t --match-test _live_ --chain-id 1337 --fork-url http://localhost:8545
           done
         timeout-minutes: 15
         working-directory: integrations-v3
@@ -124,7 +124,7 @@ jobs:
           do
             export ETH_FORK_TESTED_CM_ASSET=$u
             echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
-            forge t --match-test _live_ --fork-url http://localhost:8545
+            forge t --match-test _live_ --chain-id 1337 --fork-url http://localhost:8545
           done
         timeout-minutes: 15
         working-directory: router
