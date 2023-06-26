@@ -20,6 +20,7 @@ const SIG_QUEUE = "0x3a66f901";
 
 class SafeHelper {
   #provider: ethers.providers.JsonRpcProvider;
+  #tenderly: boolean;
   #service!: SafeApiKit.default;
   #signer!: ethers.providers.JsonRpcSigner;
   #safeAddress: string;
@@ -27,8 +28,9 @@ class SafeHelper {
   #pending: SafeMultisigTransactionResponse[] = [];
   #timelockExecutions: TimelockExecute[] = [];
 
-  constructor(provider: ethers.providers.JsonRpcProvider) {
+  constructor(provider: ethers.providers.JsonRpcProvider, tenderly = false) {
     this.#provider = provider;
+    this.#tenderly = tenderly;
     const { MULTISIG } = process.env;
     assert.ok(MULTISIG, "multisig address not specified");
     this.#safeAddress = MULTISIG;
@@ -70,10 +72,12 @@ class SafeHelper {
    * All the following safe interactions will be done via test wallet
    */
   public async impersonateSafe(): Promise<void> {
-    const impersonatedSafe = await impersonate(
-      this.#provider,
-      this.#safeAddress,
-    );
+    let impersonatedSafe: ethers.providers.JsonRpcSigner;
+    if (this.#tenderly) {
+      impersonatedSafe = this.#provider.getSigner(this.#safeAddress);
+    } else {
+      impersonatedSafe = await impersonate(this.#provider, this.#safeAddress);
+    }
     const ownerAddress = await this.#signer.getAddress();
     const addOwnerTx = await this.#safe.createAddOwnerTx({
       ownerAddress,
@@ -88,7 +92,9 @@ class SafeHelper {
     const owners = await this.#safe.getOwners();
     assert.ok(owners.includes(ownerAddress), "owner was not added");
     console.log("added fake owner to safe and set threshold to 1");
-    await stopImpersonate(this.#provider, this.#safeAddress);
+    if (!this.#tenderly) {
+      await stopImpersonate(this.#provider, this.#safeAddress);
+    }
   }
 
   public async run(): Promise<void> {
@@ -102,6 +108,7 @@ class SafeHelper {
       if (isExecute) {
         await warpTime(this.#provider, eta + 1);
       }
+      console.log("Executing ", tx.safeTxHash);
       await this.#execute(tx);
       if (isQueue) {
         this.#timelockExecutions.push(
