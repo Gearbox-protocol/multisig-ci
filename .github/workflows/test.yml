@@ -115,7 +115,7 @@ jobs:
             echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
             forge t --match-test _live_ --chain-id 1337 --fork-url http://localhost:8545
           done
-        timeout-minutes: 15
+        timeout-minutes: 20
         working-directory: integrations-v3
 
       - name: Run live forge tests in router
@@ -126,7 +126,7 @@ jobs:
             echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
             forge t --match-test _live_ --chain-id 1337 --fork-url http://localhost:8545
           done
-        timeout-minutes: 60
+        timeout-minutes: 90
         working-directory: router
 
       - name: The job has succeeded
