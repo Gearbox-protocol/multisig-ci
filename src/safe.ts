@@ -12,6 +12,7 @@ import {
   getTransactionsToExecute,
   impersonate,
   stopImpersonate,
+  txType,
   warpTime,
 } from "./utils.js";
 
@@ -98,17 +99,21 @@ class SafeHelper {
   }
 
   public async run(): Promise<void> {
+    let hasRealExecute = false;
     // iterate through pending transactions
     for (const tx of this.#pending) {
       const { timestamp } = await this.#provider.getBlock("latest");
-      const { multisend, isExecute, isQueue, eta } = this.#validateTransaction(
-        timestamp,
-        tx,
-      );
+      const txInfo = this.#validateTransaction(timestamp, tx);
+      const { multisend, isExecute, isQueue, eta } = txInfo;
       if (isExecute) {
-        await warpTime(this.#provider, eta + 1);
+        hasRealExecute = true;
+        await warpTime(this.#provider, eta + 1, this.#tenderly);
       }
-      console.log("Executing ", tx.safeTxHash);
+      console.log(
+        `Executing ${txType(txInfo)} ${tx.safeTxHash} with nonce ${
+          tx.nonce
+        } and eta ${eta}`,
+      );
       await this.#execute(tx);
       if (isQueue) {
         this.#timelockExecutions.push(
@@ -116,10 +121,14 @@ class SafeHelper {
         );
       }
     }
-    // iterate through "executeTransaction" timelock
-    for (const tx of this.#timelockExecutions) {
-      await warpTime(this.#provider, tx.eta + 1);
-      await this.#execute(tx.tx);
+    // if there are no real pending timelock.executeTransactions safe transactions
+    // then execute fake ones made by replacing signature in queueTransactions
+    if (!hasRealExecute) {
+      for (const tx of this.#timelockExecutions) {
+        await warpTime(this.#provider, tx.eta + 1, this.#tenderly);
+        console.log(`Executing fake execute timelock tx with eta ${tx.eta}`);
+        await this.#execute(tx.tx);
+      }
     }
   }
 

@@ -2,6 +2,8 @@ import { ethers } from "ethers";
 import sortedUniqBy from "lodash-es/sortedUniqBy.js";
 import retry, { Options } from "p-retry";
 
+import { TxInfo } from "./types.js";
+
 export async function impersonate(
   provider: ethers.providers.JsonRpcProvider,
   address: string,
@@ -46,10 +48,17 @@ export async function waitForBlock(
 export async function warpTime(
   provider: ethers.providers.JsonRpcProvider,
   time: number,
+  tenderly = false,
 ): Promise<void> {
   let latestBlock = await provider.getBlock("latest");
   if (latestBlock.timestamp < time) {
-    await provider.send("evm_mine", [time + 1]);
+    if (tenderly) {
+      await provider.send("evm_increaseTime", [
+        ethers.utils.hexValue(time - latestBlock.timestamp + 1),
+      ]);
+    } else {
+      await provider.send("evm_mine", [time + 1]);
+    }
     latestBlock = await provider.getBlock("latest");
   }
   console.log(
@@ -90,4 +99,17 @@ export function getTransactionsToExecute<
     }),
     "nonce",
   );
+}
+
+export function txType(tx: TxInfo): string {
+  let t = "safe tx";
+  if (tx.isQueue) {
+    t = "timelock queue tx";
+  } else if (tx.isExecute) {
+    t = "timelock execute tx";
+  }
+  if (tx.multisend) {
+    t = "multisend " + t;
+  }
+  return t;
 }
