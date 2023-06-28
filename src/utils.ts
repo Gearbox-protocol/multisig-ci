@@ -1,6 +1,5 @@
 import { ethers } from "ethers";
 import sortedUniqBy from "lodash-es/sortedUniqBy.js";
-import assert from "node:assert/strict";
 import retry, { Options } from "p-retry";
 
 export async function impersonate(
@@ -48,9 +47,11 @@ export async function warpTime(
   provider: ethers.providers.JsonRpcProvider,
   time: number,
 ): Promise<void> {
-  await provider.send("evm_mine", [time + 1]);
-  const latestBlock = await provider.getBlock("latest");
-  assert.ok(latestBlock);
+  let latestBlock = await provider.getBlock("latest");
+  if (latestBlock.timestamp < time) {
+    await provider.send("evm_mine", [time + 1]);
+    latestBlock = await provider.getBlock("latest");
+  }
   console.log(
     `warped time, latest block #${latestBlock.number} at ${latestBlock.timestamp}`,
   );
