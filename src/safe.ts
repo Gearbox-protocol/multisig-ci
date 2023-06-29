@@ -136,7 +136,18 @@ class SafeHelper {
     timestamp: number,
     data: SafeMultisigTransactionResponse,
   ): TxInfo {
-    assert.ok(!data.isExecuted, "safe tx already executed");
+    assert.ok(
+      !data.isExecuted,
+      `safe tx already executed in tx ${data.safeTxHash} with nonce ${data.nonce}`,
+    );
+    assert.ok(
+      data.dataDecoded,
+      `dataDecoded is missing in tx ${data.safeTxHash} with nonce ${data.nonce}`,
+    );
+    assert.ok(
+      "method" in (data.dataDecoded as any),
+      `method is missing in tx ${data.safeTxHash} with nonce ${data.nonce}`,
+    );
     if ((data.dataDecoded as any)?.method === "multiSend") {
       return this.#validateMultisend(timestamp, data as unknown as MultisendTx);
     }

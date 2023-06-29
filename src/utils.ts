@@ -51,16 +51,19 @@ export async function warpTime(
   tenderly = false,
 ): Promise<void> {
   let latestBlock = await provider.getBlock("latest");
-  if (latestBlock.timestamp < time) {
-    if (tenderly) {
-      await provider.send("evm_increaseTime", [
-        ethers.utils.hexValue(time - latestBlock.timestamp + 1),
-      ]);
-    } else {
-      await provider.send("evm_mine", [time + 1]);
-    }
-    latestBlock = await provider.getBlock("latest");
+  if (latestBlock.timestamp >= time) {
+    // time warp is not needed
+    return;
   }
+
+  if (tenderly) {
+    await provider.send("evm_increaseTime", [
+      ethers.utils.hexValue(time - latestBlock.timestamp + 1),
+    ]);
+  } else {
+    await provider.send("evm_mine", [time + 1]);
+  }
+  latestBlock = await provider.getBlock("latest");
   console.log(
     `warped time, latest block #${latestBlock.number} at ${latestBlock.timestamp}`,
   );

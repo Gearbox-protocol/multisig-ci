@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       callback:
-        description: "URL to trigger when run starts and finished"
+        description: "URL to trigger when run starts and finishes"
         required: false
         default: "https://risk.gearbox.foundation/api/ci/store"
         type: string
