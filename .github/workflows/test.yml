@@ -10,12 +10,12 @@ on:
         default: "https://safe-transaction-mainnet.safe.global"
       tx:
         description: "Multisig transaction safe tx hash"
-        required: false
-        default: dummy
+        required: true
         type: string
       callback:
         description: "URL to trigger when run starts and finished"
         required: false
+        default: "https://risk.gearbox.foundation/api/ci/store"
         type: string
       multisig:
         description: "Multisig contract address"
