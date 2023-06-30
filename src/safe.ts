@@ -140,15 +140,16 @@ class SafeHelper {
       !data.isExecuted,
       `safe tx already executed in tx ${data.safeTxHash} with nonce ${data.nonce}`,
     );
-    assert.ok(
-      data.dataDecoded,
-      `dataDecoded is missing in tx ${data.safeTxHash} with nonce ${data.nonce}`,
-    );
-    assert.ok(
-      "method" in (data.dataDecoded as any),
-      `method is missing in tx ${data.safeTxHash} with nonce ${data.nonce}`,
-    );
-    if ((data.dataDecoded as any)?.method === "multiSend") {
+    // some (bugged?) txs in safe have 'null' as dataDecoded
+    // however, timelock transactions always will have dataDecoded
+    if (!data.dataDecoded) {
+      console.warn("data decoded is missing");
+    }
+    const method = (data.dataDecoded as any)?.method;
+    if (!method) {
+      console.warn("data decoded is missing");
+    }
+    if (method === "multiSend") {
       return this.#validateMultisend(timestamp, data as unknown as MultisendTx);
     }
     return this.#validateSingle(timestamp, data as unknown as SingleTx);
@@ -171,7 +172,9 @@ class SafeHelper {
     let isQueue = false;
     let isExecute = false;
     for (const tx of txs) {
-      const method = tx.dataDecoded.method;
+      // some (bugged?) txs in safe have 'null' as dataDecoded
+      // however, timelock transactions always will have dataDecoded
+      const method = tx.dataDecoded?.method;
       if (method === "queueTransaction" || method === "executeTransaction") {
         assert.equal(tx.dataDecoded.parameters.length, 5);
         eta = Math.max(parseInt(tx.dataDecoded.parameters[4].value, 10), eta);
@@ -193,7 +196,7 @@ class SafeHelper {
   }
 
   #validateSingle(timestamp: number, data: SingleTx): TxInfo {
-    const method = data.dataDecoded.method;
+    const method = data.dataDecoded?.method;
     if (method === "queueTransaction" || method === "executeTransaction") {
       const isQueue = method === "queueTransaction";
       assert.equal(data.dataDecoded.parameters.length, 5);
