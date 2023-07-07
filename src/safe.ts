@@ -184,7 +184,7 @@ class SafeHelper {
     }
 
     if (eta) {
-      assert.ok(eta > timestamp, "ETA is outdated");
+      assert.ok(eta > timestamp, `ETA is outdated: ${eta} <= ${timestamp}`);
     }
 
     return {
