@@ -183,7 +183,7 @@ class SafeHelper {
       }
     }
 
-    if (eta) {
+    if (eta && isQueue) {
       assert.ok(eta > timestamp, `ETA is outdated: ${eta} <= ${timestamp}`);
     }
 
