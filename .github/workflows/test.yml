@@ -30,13 +30,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # This env variable will be modified by multicig script, but in case of early failure, pass value as-is to FAIL callback
+      - name: Set default output
+        run: |
+          echo "EXECUTED_TRANSACTIONS=${{ inputs.tx }}" >> "$GITHUB_ENV"
+
       - name: Trigger callback on start
         if: github.event.inputs.callback != ''
         run: |
           curl \
             -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
             -X GET \
-            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ inputs.tx }}&status=RUN"
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ env.EXECUTED_TRANSACTIONS }}&status=RUN"
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -97,6 +102,7 @@ jobs:
           anvil -f ${{ secrets.MAINNET_TESTS_FORK }} --chain-id 1 &
 
       - name: Apply multisig tx
+        id: multisig
         run: |
           yarn start
         env:
@@ -135,7 +141,7 @@ jobs:
           curl \
             -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
             -X GET \
-            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ inputs.tx }}&status=PASS"
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ env.EXECUTED_TRANSACTIONS }}&status=PASS"
 
       - name: The job has failed
         if: ${{ failure() && github.event.inputs.callback != '' }}
@@ -143,4 +149,4 @@ jobs:
           curl \
             -H "Authorization: Bearer ${{ secrets.RISK_API_TOKEN }}" \
             -X GET \
-            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ inputs.tx }}&status=FAIL"
+            "${{ inputs.callback }}?run_id=${{ github.run_id }}&tx=${{ env.EXECUTED_TRANSACTIONS }}&status=FAIL"

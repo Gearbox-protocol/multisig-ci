@@ -17,6 +17,7 @@
     "test:watch": "vitest watch"
   },
   "dependencies": {
+    "@actions/core": "^1.10.0",
     "@safe-global/api-kit": "^1.1.0",
     "@safe-global/protocol-kit": "^1.0.1",
     "@safe-global/safe-core-sdk-types": "^2.0.0",

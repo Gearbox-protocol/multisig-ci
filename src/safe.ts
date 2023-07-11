@@ -98,7 +98,10 @@ class SafeHelper {
     }
   }
 
-  public async run(): Promise<void> {
+  /**
+   * Executes all found pending transactions, returns arrat of safe tx hashes
+   */
+  public async run(): Promise<string[]> {
     let hasRealExecute = false;
     // iterate through pending transactions
     for (const tx of this.#pending) {
@@ -130,6 +133,8 @@ class SafeHelper {
         await this.#execute(tx.tx);
       }
     }
+
+    return this.#pending.map(t => t.safeTxHash);
   }
 
   #validateTransaction(

@@ -1,3 +1,4 @@
+import { exportVariable } from "@actions/core";
 import { ethers } from "ethers";
 
 import SafeHelper from "./safe.js";
@@ -13,6 +14,12 @@ console.log(`current block number: ${block.number} at ${block.timestamp}`);
 const safeHelper = new SafeHelper(provider);
 await safeHelper.init();
 await safeHelper.impersonateSafe();
-await safeHelper.run();
+const executed = await safeHelper.run();
+
+try {
+  exportVariable("EXECUTED_TRANSACTIONS", executed.join(","));
+} catch (e) {
+  console.warn(`Failed to set EXECUTED_TRANSACTIONS: ${e}`);
+}
 
 console.log("done");
