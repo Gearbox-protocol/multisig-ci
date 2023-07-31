@@ -126,10 +126,13 @@ jobs:
 
       - name: Run live forge tests in router
         run: |
-          for u in DAI USDC WETH WBTC FRAX ;
+          for u in DAI_0 USDC_0 WETH_0 WETH_1 WBTC_0 FRAX_0 ;
           do
-            export ETH_FORK_TESTED_CM_ASSET=$u
-            echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
+            export ETH_FORK_USE_EXISTING=true
+            export ETH_FORK_USE_EXISTING_PATHFINDER=true
+            export ETH_FORK_TESTED_CM_ASSET=${u%_*}
+            export ETH_FORK_TESTED_CM_INDEX=${u#*_}
+            echo "Running tests for $ETH_FORK_TESTED_CM_ASSET index $ETH_FORK_TESTED_CM_INDEX"
             forge t --match-test _live_ --chain-id 1337 --fork-url http://localhost:8545
           done
         timeout-minutes: 100
