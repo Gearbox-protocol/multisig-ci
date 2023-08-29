@@ -68,7 +68,7 @@ Credit manager ${chalk.green(cm.address)} (${chalk.green(
 ${"".padStart(138, "-")}`);
   console.log(
     [
-      "Symbol".padStart(20),
+      "Symbol".padStart(22),
       "Token".padEnd(44),
       "LT".padStart(5),
       "Forbidden",
@@ -84,7 +84,7 @@ ${"".padStart(138, "-")}`);
     const isForbidden = (cm.forbiddenTokenMask & tokenMask) > 0;
     const lt = cm.liquidationThresholds[t];
     const line = [
-      tokenSymbolByAddress[t]?.padStart(20),
+      tokenSymbolByAddress[t]?.padStart(22),
       t,
       lt?.toString(10).padStart(5),
       (isForbidden ? "x" : "").padEnd(9),

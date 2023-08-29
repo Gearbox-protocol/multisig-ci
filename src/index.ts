@@ -17,7 +17,7 @@ console.log(
 
 const provider = new ethers.providers.StaticJsonRpcProvider({
   url: DEV_RPC,
-  timeout: 120_000,
+  timeout: 300_000,
 });
 const block = await waitForBlock(provider);
 console.log(`current block number: ${block.number} at ${block.timestamp}`);
