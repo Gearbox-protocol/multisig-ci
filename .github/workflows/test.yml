@@ -118,6 +118,8 @@ jobs:
           for u in DAI USDC WETH WBTC FRAX ;
           do
             export ETH_FORK_TESTED_CM_ASSET=$u
+            export ETH_FORK_USE_EXISTING=true
+            export ETH_FORK_USE_EXISTING_PATHFINDER=true
             echo "Running tests for $ETH_FORK_TESTED_CM_ASSET"
             forge t --match-test _live_ --chain-id 1337 --fork-url http://localhost:8545
           done
