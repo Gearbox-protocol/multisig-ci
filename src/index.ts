@@ -1,17 +1,24 @@
 import { exportVariable } from "@actions/core";
+import chalk from "chalk";
 import { ethers } from "ethers";
 
 import SafeHelper from "./safe.js";
 import { waitForBlock } from "./utils.js";
 
-const { SAFE_TX, RUN_ID } = process.env;
-console.log(`run ${RUN_ID}: testing safe tx ${SAFE_TX}`);
+const { SAFE_TX, RUN_ID, DEV_RPC = "http://127.0.0.1:8545" } = process.env;
+const isTenderly = DEV_RPC.includes("tenderly");
+if (isTenderly) {
+  console.log(chalk.red("running on tenderly"));
+}
+console.log(
+  `run ${chalk.green(RUN_ID)}: testing safe tx ${chalk.white(SAFE_TX)}`,
+);
 
-const provider = new ethers.providers.JsonRpcProvider("http://127.0.0.1:8545");
+const provider = new ethers.providers.JsonRpcProvider(DEV_RPC);
 const block = await waitForBlock(provider);
 console.log(`current block number: ${block.number} at ${block.timestamp}`);
 
-const safeHelper = new SafeHelper(provider);
+const safeHelper = new SafeHelper(provider, isTenderly);
 await safeHelper.init();
 await safeHelper.impersonateSafe();
 const executed = await safeHelper.run();

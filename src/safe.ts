@@ -4,6 +4,7 @@ import {
   SafeMultisigTransactionResponse,
   SafeTransaction,
 } from "@safe-global/safe-core-sdk-types";
+import chalk from "chalk";
 import { ethers } from "ethers";
 import assert from "node:assert/strict";
 
@@ -64,6 +65,14 @@ class SafeHelper {
       this.#safeAddress,
     );
     this.#pending = getTransactionsToExecute(pendingTransactions);
+    if (this.#pending.length) {
+      console.info(
+        `Got ${chalk.green(this.#pending.length)} pending transactions`,
+      );
+      this.#pending.forEach(tx => {
+        console.log(`${chalk.green(tx.nonce)}: ${tx.safeTxHash}`);
+      });
+    }
   }
 
   /**
