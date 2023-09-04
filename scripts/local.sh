@@ -7,7 +7,7 @@ set -e
 INTEGRATIONS_BRANCH=${INTEGRATIONS_BRANCH:-legacy}
 ROUTER_BRANCH=${INTEGRATIONS_BRANCH:-main}
 ANVIL_URL=${ANVIL_URL:-http://127.0.0.1:8545}
-DEBUG=false
+DEBUG=${DEBUG:-false}
 ###############################################
 if [[ "${DEBUG}" == "true" ]]; then 
   set -x
