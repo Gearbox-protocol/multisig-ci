@@ -11,7 +11,7 @@ DEBUG=${DEBUG:-false}
 ###############################################
 if [[ "${DEBUG}" == "true" ]]; then 
   set -x
-  FORGE_TEST_FLAGS="--vvvv"; 
+  FORGE_TEST_FLAGS="-vvvv"; 
 else
   FORGE_BUILD_FLAGS="--silent"; 
   YARN_FLAGS="--silent"; 
