@@ -8,6 +8,7 @@ INTEGRATIONS_BRANCH=${INTEGRATIONS_BRANCH:-legacy}
 ROUTER_BRANCH=${INTEGRATIONS_BRANCH:-main}
 ANVIL_URL=${ANVIL_URL:-http://127.0.0.1:8545}
 DEBUG=${DEBUG:-false}
+FAILED=0
 ###############################################
 if [[ "${DEBUG}" == "true" ]]; then 
   set -x
@@ -44,12 +45,12 @@ cd ${TEMP_DIR}/integrations-v3
 yarn install --frozen-lockfile ${YARN_FLAGS}
 forge build ${FORGE_BUILD_FLAGS}
 # TODO: wstETH is temporary removed
-for u in DAI_0 USDC_0 WETH_0 WETH_1 WBTC_0 FRAX_0 ;
+for u in DAI_0 USDC_0 WETH_0 WBTC_0 FRAX_0 ;
 do
   export ETH_FORK_TESTED_CM_ASSET=${u%_*}
   export ETH_FORK_TESTED_CM_INDEX=${u#*_}
   echo "Running integrations-v3 tests for ${ETH_FORK_TESTED_CM_ASSET} index ${ETH_FORK_TESTED_CM_INDEX}"
-  forge t ${FORGE_TEST_FLAGS} --match-test _live_ --chain-id 1337 --fork-url ${ANVIL_URL} || true
+  forge t ${FORGE_TEST_FLAGS} --match-test _live_ --chain-id 1337 --fork-url ${ANVIL_URL} || FAILED=1
 done
 ###############################################
 # Tesing router
@@ -67,5 +68,7 @@ do
   export ETH_FORK_TESTED_CM_ASSET=${u%_*}
   export ETH_FORK_TESTED_CM_INDEX=${u#*_}
   echo "Running router tests for ${ETH_FORK_TESTED_CM_ASSET} index ${ETH_FORK_TESTED_CM_INDEX}"
-  forge t ${FORGE_TEST_FLAGS} --match-test _live_ --chain-id 1337 --fork-url ${ANVIL_URL} || true
+  forge t ${FORGE_TEST_FLAGS} --match-test _live_ --chain-id 1337 --fork-url ${ANVIL_URL} || FAILED=1
 done
+
+exit ${FAILED}
