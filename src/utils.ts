@@ -1,8 +1,9 @@
 import { ethers } from "ethers";
 import sortedUniqBy from "lodash-es/sortedUniqBy.js";
-import retry, { Options } from "p-retry";
+import type { Options } from "p-retry";
+import retry from "p-retry";
 
-import { TxInfo } from "./types.js";
+import type { TxInfo } from "./types.js";
 
 export async function impersonate(
   provider: ethers.providers.JsonRpcProvider,

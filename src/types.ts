@@ -1,4 +1,4 @@
-import {
+import type {
   SafeMultisigTransactionResponse,
   SafeTransaction,
 } from "@safe-global/safe-core-sdk-types";

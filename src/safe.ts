@@ -1,14 +1,20 @@
+import assert from "node:assert/strict";
+
 import SafeApiKit from "@safe-global/api-kit";
 import Safe, { EthersAdapter } from "@safe-global/protocol-kit";
-import {
+import type {
   SafeMultisigTransactionResponse,
   SafeTransaction,
 } from "@safe-global/safe-core-sdk-types";
 import chalk from "chalk";
 import { ethers } from "ethers";
-import assert from "node:assert/strict";
 
-import { MultisendTx, SingleTx, TimelockExecute, TxInfo } from "./types.js";
+import type {
+  MultisendTx,
+  SingleTx,
+  TimelockExecute,
+  TxInfo,
+} from "./types.js";
 import {
   getTransactionsToExecute,
   impersonate,
