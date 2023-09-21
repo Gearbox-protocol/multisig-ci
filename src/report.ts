@@ -9,7 +9,7 @@ import {
   tokenSymbolByAddress,
 } from "@gearbox-protocol/sdk";
 import chalk from "chalk";
-import type { ethers } from "ethers";
+import { ethers } from "ethers";
 
 const oracle = IPriceOracleBase__factory.createInterface();
 
@@ -21,8 +21,11 @@ export default async function report(
     provider,
   );
   const [oracleAddr, dcAddr] = await Promise.all([
-    ap.getAddressOrRevert("PRICE_ORACLE", 2),
-    ap.getAddressOrRevert("DATA_COMPRESSOR", 210),
+    ap.getAddressOrRevert(ethers.utils.formatBytes32String("PRICE_ORACLE"), 2),
+    ap.getAddressOrRevert(
+      ethers.utils.formatBytes32String("DATA_COMPRESSOR"),
+      210,
+    ),
   ]);
   const dc = IDataCompressorV2_10__factory.connect(dcAddr, provider);
   const cms = await dc.getCreditManagersV2List();
