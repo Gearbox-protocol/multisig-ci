@@ -2,8 +2,8 @@ import {
   ADDRESS_PROVIDER,
   CreditManagerData,
   IAddressProvider__factory,
-  IDataCompressor__factory,
-  IPriceOracleV2__factory,
+  IDataCompressorV2_10__factory,
+  IPriceOracleBase__factory,
   MCall,
   safeMulticall,
   tokenSymbolByAddress,
@@ -11,7 +11,7 @@ import {
 import chalk from "chalk";
 import { ethers } from "ethers";
 
-const oracle = IPriceOracleV2__factory.createInterface();
+const oracle = IPriceOracleBase__factory.createInterface();
 
 export default async function report(
   provider: ethers.providers.JsonRpcProvider,
@@ -24,15 +24,12 @@ export default async function report(
     ap.getPriceOracle(),
     ap.getDataCompressor(),
   ]);
-  const dc = IDataCompressor__factory.connect(dcAddr, provider);
-  const cms = await dc.getCreditManagersList();
+  const dc = IDataCompressorV2_10__factory.connect(dcAddr, provider);
+  const cms = await dc.getCreditManagersV2List();
 
   // gather collateral tokens from all cms to get price feeds
   const tokens = new Set<string>([]);
   for (const cm of cms) {
-    if (cm.version < 2) {
-      continue;
-    }
     cm.collateralTokens.forEach(t => tokens.add(t));
   }
   // get price feed and make mapping token -> feed
@@ -50,9 +47,6 @@ export default async function report(
   );
 
   for (const cm of cms) {
-    if (cm.version < 2) {
-      continue;
-    }
     reportCm(new CreditManagerData(cm), feeds);
   }
 }
