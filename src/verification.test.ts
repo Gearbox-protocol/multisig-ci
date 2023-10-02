@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import * as Deploy from "./deploy.types.js";
 import {
+  ContractMeta,
   gatherRepos,
   getContractRepo,
-  getForgeFlags,
+  getForgeBuildFlags,
+  getForgeCreateFlags,
   getGithubUrl,
-  RepoMeta,
 } from "./verification.js";
 
 describe("getGithubUrl", () => {
@@ -38,7 +39,7 @@ describe("getContractRepo", () => {
       encodedConstructorArgs:
         "000000000000000000000000cf64698aff7e5f27a11dff868af228653ba53be00000000000000000000000004ebdf703948ddcea3b11f675b4d1fba9d2414a14000000000000000000000000eef0c605546958c1f899b6fb336c20671f9cd49f0000000000000000000000005f4ec3df9cbd43714fe2740f5e3616155c5b8419000000000000000000000000cd627aa160a6fa45eb793d19ef54f5062f20f33f00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000165052494345464545445f63727655534445544843525600000000000000000000",
     };
-    const expected: RepoMeta = {
+    const expected: ContractMeta = {
       repo: "@gearbox-protocol/integrations-v3",
       commit: "5324a48a9e4144d5f3fa0f83e5d788e1d7336de0",
       forgeFlags: "--use 0.8.17 --optimize --optimizer-runs 10000",
@@ -69,10 +70,10 @@ describe("getContractRepo", () => {
   });
 });
 
-describe("getForgeFlags", () => {
+describe("getForgeBuildFlags", () => {
   it("should work correctly", () => {
     expect(
-      getForgeFlags({
+      getForgeBuildFlags({
         compiler: "0.8.17+commit.8df45f5f",
         optimizer: {
           enabled: true,
@@ -83,6 +84,41 @@ describe("getForgeFlags", () => {
         commit: "5324a48a9e4144d5f3fa0f83e5d788e1d7336de0",
       }),
     ).toBe("--use 0.8.17 --optimize --optimizer-runs 10000");
+  });
+});
+
+describe("getForgeCreateFlags", () => {
+  it("should work correctly", () => {
+    expect(
+      getForgeCreateFlags({
+        contractName: "CurveCryptoLPPriceFeed",
+        contractAddress: "0x603e987f2B7d72EF3c6d4D0F32776eCfD54C483e",
+        constructorArguments: [
+          "0xcF64698AFF7E5f27A11dff868AF228653ba53be0",
+          "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14",
+          "0xEEf0C605546958c1f899b6fB336C20671f9cD49F",
+          "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          "0xCd627aA160A6fA45Eb793D19Ef54f5062F20f33f",
+          "PRICEFEED_crvUSDETHCRV",
+        ],
+        verify: true,
+        verified: false,
+        metadata: {
+          compiler: "0.8.17+commit.8df45f5f",
+          optimizer: {
+            enabled: true,
+            runs: 10000,
+          },
+          source:
+            "@gearbox-protocol/integrations-v3/contracts/oracles/curve/CurveCryptoLPPriceFeed.sol",
+          commit: "5324a48a9e4144d5f3fa0f83e5d788e1d7336de0",
+        },
+        encodedConstructorArgs:
+          "000000000000000000000000cf64698aff7e5f27a11dff868af228653ba53be00000000000000000000000004ebdf703948ddcea3b11f675b4d1fba9d2414a14000000000000000000000000eef0c605546958c1f899b6fb336c20671f9cd49f0000000000000000000000005f4ec3df9cbd43714fe2740f5e3616155c5b8419000000000000000000000000cd627aa160a6fa45eb793d19ef54f5062f20f33f00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000165052494345464545445f63727655534445544843525600000000000000000000",
+      }),
+    ).toBe(
+      '--use 0.8.17 --optimize --optimizer-runs 10000 --json contracts/oracles/curve/CurveCryptoLPPriceFeed.sol:CurveCryptoLPPriceFeed --constructor-args "0xcF64698AFF7E5f27A11dff868AF228653ba53be0" "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14" "0xEEf0C605546958c1f899b6fB336C20671f9cD49F" "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" "0xCd627aA160A6fA45Eb793D19Ef54f5062F20f33f" "PRICEFEED_crvUSDETHCRV"',
+    );
   });
 });
 

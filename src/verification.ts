@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { ethers } from "ethers";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -20,7 +21,7 @@ export const WHITELISTED_REPOS = [
   "router",
 ];
 
-export interface RepoMeta {
+export interface ContractMeta {
   /**
    * repo name with '@' prefix
    */
@@ -29,7 +30,7 @@ export interface RepoMeta {
   forgeFlags?: string;
 }
 
-export function getContractRepo(meta: Deploy.Contract): RepoMeta {
+export function getContractRepo(meta: Deploy.Contract): ContractMeta {
   const [org, name] = meta.metadata.source
     .split("/")
     .slice(0, 2)
@@ -53,7 +54,7 @@ export function getContractRepo(meta: Deploy.Contract): RepoMeta {
   return {
     repo: `${org}/${name}`,
     commit: meta.metadata.commit,
-    forgeFlags: getForgeFlags(meta.metadata),
+    forgeFlags: getForgeBuildFlags(meta.metadata),
   };
 }
 
@@ -67,7 +68,7 @@ export function getGithubUrl(repo: string): string {
  * https://book.getfoundry.sh/reference/forge/forge-build
  * @param contract
  */
-export function getForgeFlags(meta: Deploy.CompilerInfo): string {
+export function getForgeBuildFlags(meta: Deploy.CompilerInfo): string {
   const flags: string[] = [];
   if (meta.compiler) {
     flags.push("--use", meta.compiler.split("+")[0]);
@@ -82,12 +83,43 @@ export function getForgeFlags(meta: Deploy.CompilerInfo): string {
 }
 
 /**
+ * Gets CLI flags to pass to `forge create`
+ * https://book.getfoundry.sh/reference/forge/forge-build
+ * @param contract
+ */
+export function getForgeCreateFlags(meta: Deploy.Contract): string {
+  const buildFlags = getForgeBuildFlags(meta.metadata);
+  // forge create src/Contract.sol:MyToken --constructor-args "My Token" "MT"
+  const { repo } = getContractRepo(meta);
+  const src =
+    meta.metadata.source.replace(repo + "/", "") + ":" + meta.contractName;
+
+  return [
+    buildFlags,
+    "--unlocked",
+    "--from",
+    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // well-known
+    "--json",
+    src,
+    "--constructor-args",
+    ...meta.constructorArguments.map(a => {
+      // strings with spaces in quotes
+      if (a.includes(" ")) {
+        return `"${a}"`;
+      }
+      // rest (addresses, numbers) as-is
+      return a;
+    }),
+  ].join(" ");
+}
+
+/**
  * gatherRepos gets metadata file and returns map between repo name and commit to checkout
  * it throws if there're different commit from same repo
  **/
-export function gatherRepos(metadata: Deploy.Transaction): RepoMeta[] {
+export function gatherRepos(metadata: Deploy.Transaction): ContractMeta[] {
   const contracts = Object.values(metadata);
-  const repos = new Map<string, RepoMeta>();
+  const repos = new Map<string, ContractMeta>();
   for (const contract of contracts) {
     const repo = getContractRepo(contract);
     const old = repos.get(repo.repo);
@@ -112,7 +144,7 @@ export function gatherRepos(metadata: Deploy.Transaction): RepoMeta[] {
  * @param repo
  */
 export async function cloneRepo(
-  { repo, commit }: RepoMeta,
+  { repo, commit }: ContractMeta,
   sandboxDir: string,
 ): Promise<void> {
   const prefix = chalk.cyan(`[clone][${repo}]`);
@@ -136,7 +168,7 @@ export async function cloneRepo(
  * buildRepo installs deps and runs forge build
  */
 export function buildRepo(
-  { repo, forgeFlags }: RepoMeta,
+  { repo, forgeFlags }: ContractMeta,
   sandboxDir: string,
 ): void {
   const prefix = chalk.cyan(`[build][${repo}]`);
@@ -150,7 +182,39 @@ export function buildRepo(
   spawnSync("forge", ["build", ...(forgeFlags?.split(" ") ?? [])], {
     stdio: "inherit",
     cwd: dir,
+    env: {
+      ...process.env,
+      FOUNDRY_BYTECODE_HASH: "none",
+    },
   });
+}
+
+export async function deployContract(
+  provider: ethers.providers.JsonRpcProvider,
+  contract: Deploy.Contract,
+  sandboxDir: string,
+): Promise<string> {
+  const { repo } = getContractRepo(contract);
+  const dir = path.resolve(sandboxDir, repo.split("/")[1]);
+  const prefix = chalk.cyan(`[deploy][${contract.contractName}]`);
+  const deployFlags = getForgeCreateFlags(contract);
+  console.log(`${prefix} forge create ${deployFlags} in ${dir}`);
+
+  const { status, stdout, stderr } = spawnSync(
+    "forge",
+    ["create", ...(deployFlags?.split(" ") ?? [])],
+    {
+      cwd: dir,
+      encoding: "utf-8",
+    },
+  );
+  if (status !== 0) {
+    throw new Error(stderr);
+  }
+  const { transactionHash } = JSON.parse(stdout);
+  console.info(`${prefix} deployed in tx ${chalk.yellow(transactionHash)}`);
+  const tx = await provider.getTransaction(transactionHash);
+  return tx.data;
 }
 
 /**
@@ -183,7 +247,7 @@ export async function traverseForgeOut(
         }
         out.set(prefix + forgeMeta.ast.absolutePath, f);
       } catch (e) {
-        console.warn(`File ${f} is not forge meta: ${e}`);
+        // console.warn(`File ${f} is not forge meta: ${e}`);
       }
     }
   }

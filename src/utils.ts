@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import sortedUniqBy from "lodash-es/sortedUniqBy.js";
 import retry, { Options } from "p-retry";
 
+import * as Batch from "./batch.types.js";
 import {
   DecodedTx,
   MultisendTransactionDecoded,
@@ -158,26 +159,40 @@ export function create2Address(tx: Create2Tx): string {
   );
 }
 
-export function getCreate2transactions(tx: DecodedTx): Create2Tx[] {
-  let actions: Array<Create2Tx | undefined> = [];
+export function getCreate2transactions(
+  tx: DecodedTx | Batch.Batch,
+): Create2Tx[] {
+  let result: Array<Create2Tx | undefined> = [];
+
   try {
-    // Actions without dataDecoded: pending transactions where safe api bugged
-    if (!tx.dataDecoded) {
-      return [];
-    }
-    const isMultiSend = tx.dataDecoded.method === "multiSend";
-    if (isMultiSend) {
-      const mTx = tx as MultisendTx;
-      actions = mTx.dataDecoded.parameters[0].valueDecoded.map(unwrapTimelock);
+    if ("createdAt" in tx) {
+      result = tx.transactions.map(unwrapBatchTx);
     } else {
-      const sTx = tx as SingleTx;
-      actions = [unwrapTimelock(sTx)];
+      // Actions without dataDecoded: pending transactions where safe api bugged
+      if (!tx.dataDecoded) {
+        return [];
+      }
+      const isMultiSend = tx.dataDecoded.method === "multiSend";
+      if (isMultiSend) {
+        const mTx = tx as MultisendTx;
+        result = mTx.dataDecoded.parameters[0].valueDecoded.map(unwrapTimelock);
+      } else {
+        const sTx = tx as SingleTx;
+        result = [unwrapTimelock(sTx)];
+      }
     }
   } catch (e) {
     console.warn(e);
     return [];
   }
-  return actions.filter(Boolean) as Create2Tx[];
+  return result.filter(Boolean) as Create2Tx[];
+}
+
+function unwrapBatchTx({
+  contractInputsValues,
+}: Batch.Transaction): Create2Tx | undefined {
+  const { data, target, signature } = contractInputsValues;
+  return unwrapCreate2tx(target, signature, data);
 }
 
 /**
@@ -195,21 +210,30 @@ function unwrapTimelock(
     )
   ) {
     const target = data.parameters[0].value;
-    const method = data.parameters[2].value;
-    if (target !== CREATE2_FACTORY_ADDR) {
-      return;
-    }
-    if (method !== "deploy(bytes32,bytes)") {
-      return;
-    }
+    const signature = data.parameters[2].value;
+    const rawData = data.parameters[3].value;
     // In timelock tx:
     // Arg 2 is signature, e.g. "addPriceFeed(address,address)"
     // Arg 3 is data, without 4-byte function signature
     // we need to construct calldata to decode gearbox contract action
-    const signature = ethers.utils.id(method).substring(0, 10);
-    const calldata = data.parameters[3].value.replace("0x", signature);
-
-    const tx = create2factory.parseTransaction({ data: calldata });
-    return { salt: tx.args[0], bytecode: tx.args[1] };
+    return unwrapCreate2tx(target, signature, rawData);
   }
+}
+
+function unwrapCreate2tx(
+  target: string,
+  signature: string,
+  rawData: string,
+): Create2Tx | undefined {
+  if (target !== CREATE2_FACTORY_ADDR) {
+    return;
+  }
+  if (signature !== "deploy(bytes32,bytes)") {
+    return;
+  }
+  const fourbyte = ethers.utils.id(signature).substring(0, 10);
+  const calldata = rawData.replace("0x", fourbyte);
+
+  const tx = create2factory.parseTransaction({ data: calldata });
+  return { salt: tx.args[0], bytecode: tx.args[1] };
 }

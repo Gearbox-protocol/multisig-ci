@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import * as Batch from "./batch.types.js";
+import * as Deploy from "./deploy.types.js";
 import * as Forge from "./forge.types.js";
 import { SafeBase } from "./safe-base.js";
 import { DecodedTx } from "./types.js";
 import {
   create2Address,
+  Create2Tx,
   getCreate2transactions,
   getTransactionsToExecute,
 } from "./utils.js";
@@ -26,12 +29,15 @@ const SANDBOX = path.resolve(process.cwd(), "sandbox");
 export class Verifier extends SafeBase {
   public async verify(...args: string[]): Promise<void> {
     await this.init();
-    // TODO: modify input to accept not only safe tx hashes, but also jsons that are uploaded to safe
     if (args.length === 0) {
       await this.#verifyPending();
-    }
-    for (const safeTxHash of args) {
-      await this.#verifySafeTx(safeTxHash);
+    } else if (args.length === 2 && args.every(a => a.endsWith(".json"))) {
+      await this.#verifyBatchAndMeta(args[0], args[1]);
+      return;
+    } else {
+      for (const safeTxHash of args) {
+        await this.#verifySafeTx(safeTxHash);
+      }
     }
   }
 
@@ -41,7 +47,7 @@ export class Verifier extends SafeBase {
     );
     const pending = getTransactionsToExecute(pendingTransactions);
     for (const tx of pending) {
-      await this.#verify(tx as any);
+      await this.#verifySafe(tx as any);
     }
   }
 
@@ -50,17 +56,36 @@ export class Verifier extends SafeBase {
     if (!tx) {
       throw new Error(`safe tx ${safeTxHash} not found`);
     }
-    await this.#verify(tx as any);
+    await this.#verifySafe(tx as any);
   }
 
-  async #verify(tx: DecodedTx): Promise<void> {
+  async #verifyBatchAndMeta(
+    batchFile: string,
+    metaFile: string,
+  ): Promise<void> {
+    await clearDir(SANDBOX);
+    await Promise.all(
+      DEPLOY_REPOS.map(r =>
+        cloneRepo({ repo: `@gearbox-protocol/${r}` }, SANDBOX),
+      ),
+    );
+
+    const batchContent = await fs.readFile(batchFile, "utf-8");
+    const metaContent = await fs.readFile(metaFile, "utf-8");
+    const batch: Batch.Batch = JSON.parse(batchContent);
+    const meta: Deploy.Transaction = JSON.parse(metaContent);
+    const create2txs = getCreate2transactions(batch);
+    await this.#verify(create2txs, meta);
+  }
+
+  async #verifySafe(tx: DecodedTx): Promise<void> {
     console.info(`Verifying tx ${chalk.green(tx.safeTxHash)}...`);
     await fs.writeFile(
       path.resolve(SANDBOX, `${tx.safeTxHash}.tx.json`),
       JSON.stringify(tx, null, 2),
     );
-    await clearDir(SANDBOX);
 
+    await clearDir(SANDBOX);
     await Promise.all(
       DEPLOY_REPOS.map(r =>
         cloneRepo({ repo: `@gearbox-protocol/${r}` }, SANDBOX),
@@ -68,6 +93,14 @@ export class Verifier extends SafeBase {
     );
     // find metadata for safe tx
     const meta = await getDeployMeta(tx.safeTxHash, SANDBOX);
+    const create2txs = getCreate2transactions(tx);
+    await this.#verify(create2txs, meta);
+  }
+
+  async #verify(
+    create2txs: Create2Tx[],
+    meta: Deploy.Transaction,
+  ): Promise<void> {
     const repos = gatherRepos(meta);
     await Promise.all(
       repos.map(async r => {
@@ -86,8 +119,8 @@ export class Verifier extends SafeBase {
       );
     }
 
-    const create2txs = getCreate2transactions(tx);
     const metaDeploys = Object.values(meta);
+
     for (const tx2 of create2txs) {
       const address = create2Address(tx2);
       const metaDeploy = metaDeploys.find(
@@ -106,14 +139,40 @@ export class Verifier extends SafeBase {
       const forgeData: Forge.JSON = JSON.parse(
         readFileSync(forgeFile, "utf-8"),
       );
+      const forgeBytecode =
+        forgeData.bytecode.object + metaDeploy.encodedConstructorArgs;
 
-      const log = `----------- CREATE2 TRANSACTION BYTECODE -----------------
+      const minlen = Math.min(forgeBytecode.length, tx2.bytecode.length);
+      let matchLen = 0;
+      for (let i = minlen; i--; i > 0) {
+        if (tx2.bytecode.slice(0, i) === forgeBytecode.slice(0, i)) {
+          matchLen = i;
+          break;
+        }
+      }
+
+      const log = `
+MATCH === ${forgeBytecode === tx2.bytecode}
+
+CREATE2 LENGTH: ${tx2.bytecode.length}
+FORGE BYTECODE LENGTH: ${forgeBytecode.length}
+FORGE BYTECODE + CONSTRUCTOR LENGTH: ${
+        forgeBytecode.length + metaDeploy.encodedConstructorArgs.length
+      }
+MATCH LEN: ${matchLen}
+
+----------- CREATE2 BYTECODE TAIL -----------------
+${tx2.bytecode.slice(matchLen)}
+
+----------- FORGE BYTECODE TAIL -----------------
+${forgeBytecode.slice(matchLen)}
+
+----------- CREATE2 TRANSACTION BYTECODE -----------------
 ${tx2.bytecode}
       
 
 ----------- FORGE BYTECODE -----------------
-${forgeData.bytecode.object}
-      
+${forgeBytecode}
 
 ----------- CONSTRUCTOR ARGS -----------------
 ${metaDeploy.encodedConstructorArgs}`;

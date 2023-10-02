@@ -12,6 +12,7 @@
 /typechain
 /types
 /sandbox
+/input
 coverage*
 
 .env
