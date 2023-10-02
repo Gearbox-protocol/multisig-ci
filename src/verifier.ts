@@ -106,25 +106,19 @@ export class Verifier extends SafeBase {
       const forgeData: Forge.JSON = JSON.parse(
         readFileSync(forgeFile, "utf-8"),
       );
-      const bcmp = forgeData.bytecode.object; // === tx2.bytecode;
-      const bcmp2 = forgeData.deployedBytecode.object; // === tx2.bytecode;
 
-      const s = `----------- CREATE2 TRANSACTION BYTECODE -----------------
+      const log = `----------- CREATE2 TRANSACTION BYTECODE -----------------
 ${tx2.bytecode}
       
 
 ----------- FORGE BYTECODE -----------------
-${bcmp}
-      
-
------------ FORGE DEPLOYED BYTECODE -----------------
-${bcmp2}
+${forgeData.bytecode.object}
       
 
 ----------- CONSTRUCTOR ARGS -----------------
 ${metaDeploy.encodedConstructorArgs}`;
 
-      await fs.writeFile(path.resolve(SANDBOX, `${address}.log`), s);
+      await fs.writeFile(path.resolve(SANDBOX, `${address}.log`), log);
     }
   }
 }
