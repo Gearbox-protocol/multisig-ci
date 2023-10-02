@@ -156,9 +156,6 @@ MATCH === ${forgeBytecode === tx2.bytecode}
 
 CREATE2 LENGTH: ${tx2.bytecode.length}
 FORGE BYTECODE LENGTH: ${forgeBytecode.length}
-FORGE BYTECODE + CONSTRUCTOR LENGTH: ${
-        forgeBytecode.length + metaDeploy.encodedConstructorArgs.length
-      }
 MATCH LEN: ${matchLen}
 
 ----------- CREATE2 BYTECODE TAIL -----------------
@@ -170,7 +167,6 @@ ${forgeBytecode.slice(matchLen)}
 ----------- CREATE2 TRANSACTION BYTECODE -----------------
 ${tx2.bytecode}
       
-
 ----------- FORGE BYTECODE -----------------
 ${forgeBytecode}
 

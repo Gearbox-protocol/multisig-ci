@@ -166,10 +166,12 @@ export async function cloneRepo(
 
 /**
  * buildRepo installs deps and runs forge build
+ * Set bytecodeHash to true to add metadata hash to bytecode
  */
 export function buildRepo(
   { repo, forgeFlags }: ContractMeta,
   sandboxDir: string,
+  bytecodeHash = false,
 ): void {
   const prefix = chalk.cyan(`[build][${repo}]`);
   const dir = path.resolve(sandboxDir, repo.split("/")[1]);
@@ -184,7 +186,7 @@ export function buildRepo(
     cwd: dir,
     env: {
       ...process.env,
-      FOUNDRY_BYTECODE_HASH: "none",
+      ...(bytecodeHash ? {} : { FOUNDRY_BYTECODE_HASH: "none" }),
     },
   });
 }
