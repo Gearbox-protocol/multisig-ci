@@ -1,5 +1,3 @@
-import SafeApiKit from "@safe-global/api-kit";
-import Safe, { EthersAdapter } from "@safe-global/protocol-kit";
 import {
   SafeMultisigTransactionResponse,
   SafeTransaction,
@@ -8,6 +6,7 @@ import chalk from "chalk";
 import { ethers } from "ethers";
 import assert from "node:assert/strict";
 
+import { SafeBase } from "./safe-base.js";
 import { MultisendTx, SingleTx, TimelockExecute, TxInfo } from "./types.js";
 import {
   getTransactionsToExecute,
@@ -20,49 +19,20 @@ import {
 const SIG_EXECUTE = "0x0825f38f";
 const SIG_QUEUE = "0x3a66f901";
 
-class SafeHelper {
-  #provider: ethers.providers.JsonRpcProvider;
-  #tenderly: boolean;
-  #service!: SafeApiKit.default;
-  #signer!: ethers.providers.JsonRpcSigner;
-  #safeAddress: string;
-  #safe!: Safe.default;
+class SafeHelper extends SafeBase {
   #pending: SafeMultisigTransactionResponse[] = [];
   #timelockExecutions: TimelockExecute[] = [];
+  #tenderly: boolean;
 
   constructor(provider: ethers.providers.JsonRpcProvider, tenderly = false) {
-    this.#provider = provider;
+    super(provider);
     this.#tenderly = tenderly;
-    const { MULTISIG } = process.env;
-    assert.ok(MULTISIG, "multisig address not specified");
-    this.#safeAddress = MULTISIG;
   }
 
   public async init(): Promise<void> {
-    const { SAFE_API } = process.env;
-    assert.ok(SAFE_API, "safe API not specified");
-
-    this.#signer = this.#provider.getSigner();
-    const ethAdapter = new EthersAdapter({
-      ethers: ethers as any,
-      signerOrProvider: this.#signer,
-    });
-
-    // eslint-disable-next-line new-cap
-    this.#service = new SafeApiKit.default({
-      txServiceUrl: SAFE_API,
-      ethAdapter,
-    });
-
-    this.#safe = await Safe.default.create({
-      ethAdapter,
-      safeAddress: this.#safeAddress,
-    });
-    const signerAddress = await this.#signer.getAddress();
-
-    console.log("initialized safe helper with signer:", signerAddress);
-    const pendingTransactions = await this.#service.getPendingTransactions(
-      this.#safeAddress,
+    await super.init();
+    const pendingTransactions = await this.service.getPendingTransactions(
+      this.safeAddress,
     );
     this.#pending = getTransactionsToExecute(pendingTransactions);
     if (this.#pending.length) {
@@ -84,12 +54,12 @@ class SafeHelper {
   public async impersonateSafe(): Promise<void> {
     let impersonatedSafe: ethers.providers.JsonRpcSigner;
     if (this.#tenderly) {
-      impersonatedSafe = this.#provider.getSigner(this.#safeAddress);
+      impersonatedSafe = this.provider.getSigner(this.safeAddress);
     } else {
-      impersonatedSafe = await impersonate(this.#provider, this.#safeAddress);
+      impersonatedSafe = await impersonate(this.provider, this.safeAddress);
     }
-    const ownerAddress = await this.#signer.getAddress();
-    const addOwnerTx = await this.#safe.createAddOwnerTx({
+    const ownerAddress = await this.signer.getAddress();
+    const addOwnerTx = await this.safe.createAddOwnerTx({
       ownerAddress,
       threshold: 1,
     });
@@ -97,13 +67,13 @@ class SafeHelper {
       to: addOwnerTx.data.to,
       data: addOwnerTx.data.data,
     });
-    const receipt = await this.#provider.getTransactionReceipt(hash);
+    const receipt = await this.provider.getTransactionReceipt(hash);
     assert.ok(receipt.status, "failed to add owner to safe");
-    const owners = await this.#safe.getOwners();
+    const owners = await this.safe.getOwners();
     assert.ok(owners.includes(ownerAddress), "owner was not added");
     console.log("added fake owner to safe and set threshold to 1");
     if (!this.#tenderly) {
-      await stopImpersonate(this.#provider, this.#safeAddress);
+      await stopImpersonate(this.provider, this.safeAddress);
     }
   }
 
@@ -114,12 +84,12 @@ class SafeHelper {
     let hasRealExecute = false;
     // iterate through pending transactions
     for (const tx of this.#pending) {
-      const { timestamp } = await this.#provider.getBlock("latest");
+      const { timestamp } = await this.provider.getBlock("latest");
       const txInfo = this.#validateTransaction(timestamp, tx);
       const { multisend, isExecute, isQueue, eta } = txInfo;
       if (isExecute) {
         hasRealExecute = true;
-        await warpTime(this.#provider, eta + 1, this.#tenderly);
+        await warpTime(this.provider, eta + 1, this.#tenderly);
       }
       console.log(
         `Executing ${txType(txInfo)} ${tx.safeTxHash} with nonce ${
@@ -137,7 +107,7 @@ class SafeHelper {
     // then execute fake ones made by replacing signature in queueTransactions
     if (!hasRealExecute) {
       for (const tx of this.#timelockExecutions) {
-        await warpTime(this.#provider, tx.eta + 1, this.#tenderly);
+        await warpTime(this.provider, tx.eta + 1, this.#tenderly);
         console.log(`Executing fake execute timelock tx with eta ${tx.eta}`);
         await this.#execute(tx.tx);
       }
@@ -239,7 +209,7 @@ class SafeHelper {
   async #execute(
     tx: SafeMultisigTransactionResponse | SafeTransaction,
   ): Promise<void> {
-    const executeTxResponse = await this.#safe.executeTransaction(tx, {
+    const executeTxResponse = await this.safe.executeTransaction(tx, {
       gasLimit: 30_000_000,
     });
     const receipt = await Promise.resolve(
@@ -267,7 +237,7 @@ class SafeHelper {
   ): Promise<TimelockExecute> {
     let tx: SafeTransaction;
     if (multisend) {
-      tx = await this.#safe.createTransaction({
+      tx = await this.safe.createTransaction({
         safeTransactionData: (
           data as unknown as MultisendTx
         ).dataDecoded.parameters[0].valueDecoded.map(v => ({
@@ -277,7 +247,7 @@ class SafeHelper {
       });
     } else {
       const t = data as unknown as SingleTx;
-      tx = await this.#safe.createTransaction({
+      tx = await this.safe.createTransaction({
         safeTransactionData: {
           to: t.to,
           data: t.data!.replace(SIG_QUEUE, SIG_EXECUTE),

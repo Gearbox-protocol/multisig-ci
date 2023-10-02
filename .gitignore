@@ -11,6 +11,7 @@
 /out
 /typechain
 /types
+/sandbox
 coverage*
 
 .env

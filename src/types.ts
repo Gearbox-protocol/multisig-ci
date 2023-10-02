@@ -3,6 +3,8 @@ import {
   SafeTransaction,
 } from "@safe-global/safe-core-sdk-types";
 
+export type DecodedTx = MultisendTx | SingleTx;
+
 export type MultisendTx = Omit<
   SafeMultisigTransactionResponse,
   "dataDecoded"

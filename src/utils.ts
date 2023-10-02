@@ -2,7 +2,35 @@ import { ethers } from "ethers";
 import sortedUniqBy from "lodash-es/sortedUniqBy.js";
 import retry, { Options } from "p-retry";
 
-import { TxInfo } from "./types.js";
+import {
+  DecodedTx,
+  MultisendTransactionDecoded,
+  MultisendTx,
+  SingleTx,
+  TxInfo,
+} from "./types.js";
+
+const CREATE2_FACTORY_ADDR = "0x59b7B8Dd9E6e1F934C9c3Def4a1Eb69Bc17Ec9cc";
+const create2factory = new ethers.utils.Interface([
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "salt",
+        type: "bytes32",
+      },
+      {
+        internalType: "bytes",
+        name: "bytecode",
+        type: "bytes",
+      },
+    ],
+    name: "deploy",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+]);
 
 export async function impersonate(
   provider: ethers.providers.JsonRpcProvider,
@@ -115,4 +143,73 @@ export function txType(tx: TxInfo): string {
     t = "multisend " + t;
   }
   return t;
+}
+
+export interface Create2Tx {
+  salt: string;
+  bytecode: string;
+}
+
+export function create2Address(tx: Create2Tx): string {
+  return ethers.utils.getCreate2Address(
+    CREATE2_FACTORY_ADDR,
+    tx.salt,
+    ethers.utils.keccak256(tx.bytecode),
+  );
+}
+
+export function getCreate2transactions(tx: DecodedTx): Create2Tx[] {
+  let actions: Array<Create2Tx | undefined> = [];
+  try {
+    // Actions without dataDecoded: pending transactions where safe api bugged
+    if (!tx.dataDecoded) {
+      return [];
+    }
+    const isMultiSend = tx.dataDecoded.method === "multiSend";
+    if (isMultiSend) {
+      const mTx = tx as MultisendTx;
+      actions = mTx.dataDecoded.parameters[0].valueDecoded.map(unwrapTimelock);
+    } else {
+      const sTx = tx as SingleTx;
+      actions = [unwrapTimelock(sTx)];
+    }
+  } catch (e) {
+    console.warn(e);
+    return [];
+  }
+  return actions.filter(Boolean) as Create2Tx[];
+}
+
+/**
+ * Extracts actual create2 transaction, returns undefined if it's some other transaction
+ * @param tx
+ * @returns
+ */
+function unwrapTimelock(
+  tx: MultisendTransactionDecoded | SingleTx,
+): Create2Tx | undefined {
+  let data = tx.dataDecoded;
+  if (
+    ["queueTransaction", "executeTransaction", "cancelTransaction"].includes(
+      data.method,
+    )
+  ) {
+    const target = data.parameters[0].value;
+    const method = data.parameters[2].value;
+    if (target !== CREATE2_FACTORY_ADDR) {
+      return;
+    }
+    if (method !== "deploy(bytes32,bytes)") {
+      return;
+    }
+    // In timelock tx:
+    // Arg 2 is signature, e.g. "addPriceFeed(address,address)"
+    // Arg 3 is data, without 4-byte function signature
+    // we need to construct calldata to decode gearbox contract action
+    const signature = ethers.utils.id(method).substring(0, 10);
+    const calldata = data.parameters[3].value.replace("0x", signature);
+
+    const tx = create2factory.parseTransaction({ data: calldata });
+    return { salt: tx.args[0], bytecode: tx.args[1] };
+  }
 }
