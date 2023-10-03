@@ -47,6 +47,41 @@ describe("getContractRepo", () => {
     expect(getContractRepo(meta)).toEqual(expected);
   });
 
+  it("should ignore node_modules", () => {
+    const meta: Deploy.Contract = {
+      contractName: "CurveCryptoLPPriceFeed",
+      contractAddress: "0x47E31C6c491579b67629E6cDFB3E2362534156c9",
+      constructorArguments: [
+        "0xcF64698AFF7E5f27A11dff868AF228653ba53be0",
+        "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14",
+        "0xEEf0C605546958c1f899b6fB336C20671f9cD49F",
+        "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+        "0xCd627aA160A6fA45Eb793D19Ef54f5062F20f33f",
+        "PRICEFEED_crvUSDETHCRV",
+      ],
+      verify: true,
+      verified: false,
+      metadata: {
+        compiler: "0.8.17+commit.8df45f5f",
+        optimizer: {
+          enabled: true,
+          runs: 10000,
+        },
+        source:
+          "node_modules/@gearbox-protocol/integrations-v3/contracts/oracles/curve/CurveCryptoLPPriceFeed.sol",
+        commit: "5324a48a9e4144d5f3fa0f83e5d788e1d7336de0",
+      },
+      encodedConstructorArgs:
+        "000000000000000000000000cf64698aff7e5f27a11dff868af228653ba53be00000000000000000000000004ebdf703948ddcea3b11f675b4d1fba9d2414a14000000000000000000000000eef0c605546958c1f899b6fb336c20671f9cd49f0000000000000000000000005f4ec3df9cbd43714fe2740f5e3616155c5b8419000000000000000000000000cd627aa160a6fa45eb793d19ef54f5062f20f33f00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000165052494345464545445f63727655534445544843525600000000000000000000",
+    };
+    const expected: ContractMeta = {
+      repo: "@gearbox-protocol/integrations-v3",
+      commit: "5324a48a9e4144d5f3fa0f83e5d788e1d7336de0",
+      forgeFlags: "--use 0.8.17 --optimize --optimizer-runs 10000",
+    };
+    expect(getContractRepo(meta)).toEqual(expected);
+  });
+
   it("should fail for non-whitelisted repo", () => {
     const meta: Deploy.Contract = {
       contractName: "CurveCryptoLPPriceFeed",
@@ -117,7 +152,7 @@ describe("getForgeCreateFlags", () => {
           "000000000000000000000000cf64698aff7e5f27a11dff868af228653ba53be00000000000000000000000004ebdf703948ddcea3b11f675b4d1fba9d2414a14000000000000000000000000eef0c605546958c1f899b6fb336c20671f9cd49f0000000000000000000000005f4ec3df9cbd43714fe2740f5e3616155c5b8419000000000000000000000000cd627aa160a6fa45eb793d19ef54f5062f20f33f00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000165052494345464545445f63727655534445544843525600000000000000000000",
       }),
     ).toBe(
-      '--use 0.8.17 --optimize --optimizer-runs 10000 --json contracts/oracles/curve/CurveCryptoLPPriceFeed.sol:CurveCryptoLPPriceFeed --constructor-args "0xcF64698AFF7E5f27A11dff868AF228653ba53be0" "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14" "0xEEf0C605546958c1f899b6fB336C20671f9cD49F" "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" "0xCd627aA160A6fA45Eb793D19Ef54f5062F20f33f" "PRICEFEED_crvUSDETHCRV"',
+      "--use 0.8.17 --optimize --optimizer-runs 10000 --unlocked --from 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --json contracts/oracles/curve/CurveCryptoLPPriceFeed.sol:CurveCryptoLPPriceFeed --constructor-args 0xcF64698AFF7E5f27A11dff868AF228653ba53be0 0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14 0xEEf0C605546958c1f899b6fB336C20671f9cD49F 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 0xCd627aA160A6fA45Eb793D19Ef54f5062F20f33f PRICEFEED_crvUSDETHCRV",
     );
   });
 });

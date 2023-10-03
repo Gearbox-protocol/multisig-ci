@@ -33,6 +33,7 @@ export interface ContractMeta {
 export function getContractRepo(meta: Deploy.Contract): ContractMeta {
   const [org, name] = meta.metadata.source
     .split("/")
+    .filter(p => p !== "node_modules")
     .slice(0, 2)
     .map(s => s.toLowerCase());
 
