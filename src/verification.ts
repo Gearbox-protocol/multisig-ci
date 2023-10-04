@@ -3,7 +3,6 @@ import { ethers } from "ethers";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { SimpleGit, simpleGit } from "simple-git";
 
 import * as Deploy from "./deploy.types.js";
 import * as Forge from "./forge.types.js";
@@ -48,9 +47,9 @@ export function getContractRepo(meta: Deploy.Contract): ContractMeta {
       `Non-whitelisted repo for source '${meta.metadata.source}'`,
     );
   }
-  if (!meta.metadata.commit) {
-    throw new Error(`Commit not found for source '${meta.metadata.source}'`);
-  }
+  // if (!meta.metadata.commit) {
+  // throw new Error(`Commit not found for source '${meta.metadata.source}'`);
+  // }
 
   return {
     repo: `${org}/${name}`,
@@ -148,32 +147,32 @@ export async function cloneRepo(
   { repo, commit }: ContractMeta,
   sandboxDir: string,
 ): Promise<void> {
-  const prefix = chalk.cyan(`[clone][${repo}]`);
-  const to = commit ? ` to ${chalk.white(commit.slice(0, 8))}` : "";
-  console.log(`${prefix} cloning...`);
-  const git: SimpleGit = simpleGit({
-    baseDir: sandboxDir,
-  });
-  await git.clone(getGithubUrl(repo));
-  console.log(`${prefix} cloned`);
-  if (commit) {
-    const git = simpleGit({
-      baseDir: path.resolve(sandboxDir, repo.split("/")[1]),
-    });
-    await git.reset(["--hard", commit]);
-    console.log(`${prefix} reset ${to}`);
-  }
+  // const prefix = chalk.cyan(`[clone][${repo}]`);
+  // const to = commit ? ` to ${chalk.white(commit.slice(0, 8))}` : "";
+  // console.log(`${prefix} cloning...`);
+  // const git: SimpleGit = simpleGit({
+  //   baseDir: sandboxDir,
+  // });
+  // await git.clone(getGithubUrl(repo));
+  // console.log(`${prefix} cloned`);
+  // if (commit) {
+  //   const git = simpleGit({
+  //     baseDir: path.resolve(sandboxDir, repo.split("/")[1]),
+  //   });
+  //   await git.reset(["--hard", commit]);
+  //   console.log(`${prefix} reset ${to}`);
+  // }
 }
 
 /**
  * buildRepo installs deps and runs forge build
  * Set bytecodeHash to true to add metadata hash to bytecode
  */
-export function buildRepo(
+export async function buildRepo(
   { repo, forgeFlags }: ContractMeta,
   sandboxDir: string,
   bytecodeHash = false,
-): void {
+): Promise<void> {
   const prefix = chalk.cyan(`[build][${repo}]`);
   const dir = path.resolve(sandboxDir, repo.split("/")[1]);
   console.log(`${prefix} yarn install in ${dir}`);
@@ -181,6 +180,20 @@ export function buildRepo(
     stdio: "inherit",
     cwd: dir,
   });
+  // Use latest forge-std
+  // await fs.rm(path.resolve(dir, "lib/forge-std"), {
+  //   force: true,
+  //   recursive: true,
+  // });
+  // await fs.rm(path.resolve(dir, ".gitmodules"), {
+  //   force: true,
+  //   recursive: true,
+  // });
+  // spawnSync("forge", ["install", "foundry-rs/forge-std@v1.6.1", "--no-git"], {
+  //   stdio: "inherit",
+  //   cwd: dir,
+  // });
+
   console.log(`${prefix} forge build ${forgeFlags} in ${dir}`);
   spawnSync("forge", ["build", ...(forgeFlags?.split(" ") ?? [])], {
     stdio: "inherit",
@@ -257,9 +270,9 @@ export async function traverseForgeOut(
 }
 
 export async function clearDir(dir: string): Promise<void> {
-  for (const file of await fs.readdir(dir)) {
-    await fs.rm(path.resolve(dir, file), { force: true, recursive: true });
-  }
+  // for (const file of await fs.readdir(dir)) {
+  //   await fs.rm(path.resolve(dir, file), { force: true, recursive: true });
+  // }
 }
 
 /**

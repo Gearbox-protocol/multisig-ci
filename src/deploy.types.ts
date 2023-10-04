@@ -12,6 +12,7 @@ export interface Contract {
   verify: boolean;
   verified: boolean;
   metadata: CompilerInfo;
+  files?: Record<string, string>;
   encodedConstructorArgs: string;
 }
 

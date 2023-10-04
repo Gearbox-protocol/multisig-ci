@@ -1,3 +1,5 @@
+import { decode as bytecodeDecode } from "@ethereum-sourcify/bytecode-utils";
+import { CheckedContract, PathBuffer } from "@ethereum-sourcify/lib-sourcify";
 import { ethers } from "ethers";
 import sortedUniqBy from "lodash-es/sortedUniqBy.js";
 import retry, { Options } from "p-retry";
@@ -236,4 +238,53 @@ function unwrapCreate2tx(
 
   const tx = create2factory.parseTransaction({ data: calldata });
   return { salt: tx.args[0], bytecode: tx.args[1] };
+}
+
+export function extractFilesFromJSON(
+  files: Record<string, string>,
+): PathBuffer[] {
+  return Object.entries(files).map(([path, file]) => ({
+    path,
+    buffer: Buffer.isBuffer(file) ? file : Buffer.from(file),
+  }));
+}
+
+export function stringifyInvalidAndMissing(contract: CheckedContract): string {
+  const errors = [
+    ...Object.keys(contract.invalid),
+    ...Object.keys(contract.missing),
+  ];
+  return `${contract.name} (${errors.join(", ")})`;
+}
+
+/**
+ * Checks if there's a CBOR encoded metadata hash appended to the bytecode.
+ *
+ * @param bytecode
+ * @returns bool - true if there's a metadata hash
+ */
+export function doesContainMetadataHash(bytecode: string): boolean {
+  let containsMetadata: boolean;
+  try {
+    const decodedCBOR = bytecodeDecode(bytecode);
+    containsMetadata =
+      !!decodedCBOR.ipfs || !!decodedCBOR["bzzr0"] || !!decodedCBOR["bzzr1"];
+  } catch (e) {
+    containsMetadata = false;
+  }
+  return containsMetadata;
+}
+
+export function extractAbiEncodedConstructorArguments(
+  onchainCreationBytecode: string,
+  compiledCreationBytecode: string,
+) {
+  if (onchainCreationBytecode.length === compiledCreationBytecode.length)
+    return undefined;
+
+  const startIndex = onchainCreationBytecode.indexOf(compiledCreationBytecode);
+  return (
+    "0x" +
+    onchainCreationBytecode.slice(startIndex + compiledCreationBytecode.length)
+  );
 }
